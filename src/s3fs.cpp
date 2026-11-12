@@ -107,6 +107,7 @@ static off_t fake_diskfree_size   = -1; // default is not set(-1)
 static bool update_parent_dir_stat= false;  // default not updating parent directory stats
 static fsblkcnt_t bucket_block_count;                       // advertised block count of the bucket
 static unsigned long s3fs_block_size = 16 * 1024 * 1024;    // s3fs block size is 16MB
+static unsigned int custom_max_background = 0;              // default is not set(0)
 
 //-------------------------------------------------------------------
 // Static functions : prototype
@@ -4547,6 +4548,11 @@ static void* s3fs_init(struct fuse_conn_info* conn)
     }
 #endif
 
+    if(custom_max_background > 0){
+        conn->max_background = custom_max_background;
+        conn->congestion_threshold = (custom_max_background * 3) / 4;
+    }
+
     // Signal object
     if(!S3fsSignals::Initialize()){
         S3FS_PRN_ERR("Failed to initialize signal object, but continue...");
@@ -5427,6 +5433,15 @@ static int my_fuse_opt_proc(void* data, const char* arg, int key, struct fuse_ar
                 return -1;
             }
             ThreadPoolMan::SetWorkerCount(max_thcount);
+            return 0;
+        }
+        else if(is_prefix(arg, "max_background=")){
+            off_t val = cvt_strtoofft(strchr(arg, '=') + sizeof(char), /*base=*/ 10);
+            if(val <= 0){
+                S3FS_PRN_EXIT("argument should be over 0: max_background");
+                return -1;
+            }
+            custom_max_background = static_cast<unsigned int>(val);
             return 0;
         }
         else if(is_prefix(arg, "fd_page_size=")){
